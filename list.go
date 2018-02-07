@@ -18,8 +18,9 @@ package trello
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
+	"net/url"
+	"strconv"
+	"strings"
 )
 
 type List struct {
@@ -31,29 +32,65 @@ type List struct {
 	Pos     float32 `json:"pos"`
 }
 
+func (c *Client) List(listId string) (list *List, err error) {
+	body, err := c.Get("/lists/" + listId)
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(body, &list)
+	list.client = c
+	return
+}
+
 func (l *List) Cards() (cards []Card, err error) {
-	req, err := l.client.NewRequest("GET", l.client.endpoint+"/lists/"+l.Id+"/cards", nil)
+	body, err := l.client.Get("/lists/" + l.Id + "/cards")
 	if err != nil {
-		return
-	}
-
-	resp, err := l.client.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
 		return
 	}
 
 	err = json.Unmarshal(body, &cards)
-	for i, _ := range cards {
+	for i := range cards {
 		cards[i].client = l.client
 	}
 	return
+}
+
+func (l *List) Actions() (actions []Action, err error) {
+	body, err := l.client.Get("/lists/" + l.Id + "/actions")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(body, &actions)
+	for i := range actions {
+		actions[i].client = l.client
+	}
+	return
+}
+
+// AddCard creates with the attributes of the supplied Card struct
+// https://developers.trello.com/advanced-reference/card#post-1-cards
+func (l *List) AddCard(opts Card) (*Card, error) {
+	opts.IdList = l.Id
+
+	payload := url.Values{}
+	payload.Set("name", opts.Name)
+	payload.Set("desc", opts.Desc)
+	payload.Set("pos", strconv.FormatFloat(opts.Pos, 'g', -1, 64))
+	payload.Set("due", opts.Due)
+	payload.Set("idList", opts.IdList)
+	payload.Set("idMembers", strings.Join(opts.IdMembers, ","))
+
+	body, err := l.client.Post("/cards", payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var card Card
+	if err = json.Unmarshal(body, &card); err != nil {
+		return nil, err
+	}
+	card.client = l.client
+	return &card, nil
 }

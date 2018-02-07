@@ -16,23 +16,24 @@ limitations under the License.
 
 package trello
 
-type Attachment struct {
-	client    *Client
-	Id        string `json:"id"`
-	Bytes     int    `json:"bytes"`
-	Date      string `json:"date"`
-	EdgeColor string `json:"edgeColor"`
-	IdMember  string `json:"idMember"`
-	IsUpload  bool   `json:"isUpload"`
-	MimeType  string `json:"mimeType"`
-	Name      string `json:"name"`
-	Previews  []struct {
-		Width  int    `json:"width"`
-		Height int    `json:"height"`
-		Url    string `json:"url"`
-		Bytes  int    `json:"bytes"`
-		Id     string `json:"_id"`
-		Scaled bool   `json:"scaled"`
-	} `json:"previews"`
-	Url string `json:"url"`
+import "net/url"
+
+type Argument struct {
+	Name  string
+	Value string
+}
+
+func NewArgument(name, value string) *Argument {
+	return &Argument{
+		Name:  name,
+		Value: value,
+	}
+}
+
+func EncodeArgs(args []*Argument) string {
+	v := url.Values{}
+	for _, arg := range args {
+		v.Set(arg.Name, arg.Value)
+	}
+	return v.Encode()
 }

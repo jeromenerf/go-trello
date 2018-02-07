@@ -18,23 +18,23 @@ package trello
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"log"
+	"strings"
 )
 
 type Member struct {
-	client                   *Client
-	Id                       string   `json:"id"`
-	AvatarHash               string   `json:"avatarHash"`
-	Bio                      string   `json:"bio"`
-	BioData                  string   `json:"bioData"`
+	client     *Client
+	Id         string `json:"id"`
+	AvatarHash string `json:"avatarHash"`
+	Bio        string `json:"bio"`
+	BioData    struct {
+		Emoji interface{} `json:"emoji,omitempty"`
+	} `json:"bioData"`
 	Confirmed                bool     `json:"confirmed"`
 	FullName                 string   `json:"fullName"`
 	IdPremOrgsAdmin          []string `json:"idPremOrgsAdmin"`
 	Initials                 string   `json:"initials"`
 	MemberType               string   `json:"memberType"`
-	Products                 []string `json:"products"`
+	Products                 []int    `json:"products"`
 	Status                   string   `json:"status"`
 	Url                      string   `json:"url"`
 	Username                 string   `json:"username"`
@@ -44,32 +44,24 @@ type Member struct {
 	IdBoards                 []string `json:"idBoards"`
 	IdBoardsPinned           []string `json:"idBoardsPinned"`
 	IdOrganizations          []string `json:"idOrganizations"`
-	LoginTypes               string   `json:"loginTypes"`
+	LoginTypes               []string `json:"loginTypes"`
 	NewEmail                 string   `json:"newEmail"`
 	OneTimeMessagesDismissed []string `json:"oneTimeMessagesDismissed"`
-	//Prefs                    string   `json:"prefs"`
+	Prefs                    struct {
+		SendSummaries                 bool   `json:"sendSummaries"`
+		MinutesBetweenSummaries       int    `json:"minutesBetweenSummaries"`
+		MinutesBeforeDeadlineToNotify int    `json:"minutesBeforeDeadlineToNotify"`
+		ColorBlind                    bool   `json:"colorBlind"`
+		Locale                        string `json:"locale"`
+	} `json:"prefs"`
 	Trophies           []string `json:"trophies"`
 	UploadedAvatarHash string   `json:"uploadedAvatarHash"`
 	PremiumFeatures    []string `json:"premiumFeatures"`
 }
 
 func (c *Client) Member(nick string) (member *Member, err error) {
-	req, err := c.NewRequest("GET", c.endpoint+"/member/"+nick, nil)
+	body, err := c.Get("/members/" + nick)
 	if err != nil {
-		return
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
 		return
 	}
 
@@ -78,32 +70,35 @@ func (c *Client) Member(nick string) (member *Member, err error) {
 	return
 }
 
-func (m *Member) Boards() (boards []Board, err error) {
-	req, err := m.client.NewRequest("GET", m.client.endpoint+"/member/"+m.Id+"/boards", nil)
-	if err != nil {
-		return
+func (m *Member) Boards(field ...string) (boards []Board, err error) {
+	fields := ""
+	if len(field) == 0 {
+		fields = "all"
+	} else {
+		fields = strings.Join(field, ",")
 	}
 
-	resp, err := m.client.client.Do(req)
+	body, err := m.client.Get("/members/" + m.Id + "/boards?fields=" + fields)
 	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
 		return
 	}
 
 	err = json.Unmarshal(body, &boards)
-	if err != nil {
-		log.Println(err.(*json.UnmarshalTypeError).Offset)
-	}
-	for i, _ := range boards {
+	for i := range boards {
 		boards[i].client = m.client
+	}
+	return
+}
+
+func (m *Member) Notifications() (notifications []Notification, err error) {
+	body, err := m.client.Get("/members/" + m.Id + "/notifications")
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(body, &notifications)
+	for i := range notifications {
+		notifications[i].client = m.client
 	}
 	return
 }

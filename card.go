@@ -18,8 +18,6 @@ package trello
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"net/url"
 )
 
@@ -37,7 +35,7 @@ type Card struct {
 	IdMembersVoted        []string `json:"idMembersVoted"`
 	ManualCoverAttachment bool     `json:"manualCoverAttachment"`
 	Closed                bool     `json:"closed"`
-	Pos                   float32  `json:"pos"`
+	Pos                   float64  `json:"pos"`
 	ShortLink             string   `json:"shortLink"`
 	DateLastActivity      string   `json:"dateLastActivity"`
 	ShortUrl              string   `json:"shortUrl"`
@@ -71,22 +69,8 @@ type Card struct {
 }
 
 func (c *Client) Card(CardId string) (card *Card, err error) {
-	req, err := c.NewRequest("GET", c.endpoint+"/card/"+CardId, nil)
+	body, err := c.Get("/card/" + CardId)
 	if err != nil {
-		return
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
 		return
 	}
 
@@ -96,142 +80,111 @@ func (c *Client) Card(CardId string) (card *Card, err error) {
 }
 
 func (c *Card) Checklists() (checklists []Checklist, err error) {
-	req, err := c.client.NewRequest("GET", c.client.endpoint+"/card/"+c.Id+"/checklists", nil)
+	body, err := c.client.Get("/card/" + c.Id + "/checklists")
 	if err != nil {
-		return
-	}
-
-	resp, err := c.client.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
 		return
 	}
 
 	err = json.Unmarshal(body, &checklists)
-	for i, _ := range checklists {
-		checklists[i].client = c.client
+	for i := range checklists {
+		list := &checklists[i]
+		list.client = c.client
+		for i := range list.CheckItems {
+			item := &list.CheckItems[i]
+			item.client = c.client
+			item.listID = list.Id
+		}
 	}
 	return
 }
 
 func (c *Card) Members() (members []Member, err error) {
-	req, err := c.client.NewRequest("GET", c.client.endpoint+"/cards/"+c.Id+"/members", nil)
+	body, err := c.client.Get("/cards/" + c.Id + "/members")
 	if err != nil {
-		return
-	}
-
-	resp, err := c.client.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
 		return
 	}
 
 	err = json.Unmarshal(body, &members)
-	for i, _ := range members {
+	for i := range members {
 		members[i].client = c.client
 	}
 	return
 }
 
 func (c *Card) Attachments() (attachments []Attachment, err error) {
-	req, err := c.client.NewRequest("GET", c.client.endpoint+"/cards/"+c.Id+"/attachments", nil)
+	body, err := c.client.Get("/cards/" + c.Id + "/attachments")
 	if err != nil {
-		return
-	}
-
-	resp, err := c.client.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
 		return
 	}
 
 	err = json.Unmarshal(body, &attachments)
-	for i, _ := range attachments {
+	for i := range attachments {
 		attachments[i].client = c.client
 	}
 	return
 }
 
-func (c *Card) Attachment(attachmentId string) (attachment Attachment, err error) {
-	req, err := c.client.NewRequest("GET", c.client.endpoint+"/cards/"+c.Id+"/attachments/"+attachmentId, nil)
+// Attachment will return the specified attachment on the card
+// https://developers.trello.com/advanced-reference/card#get-1-cards-card-id-or-shortlink-attachments-idattachment
+func (c *Card) Attachment(attachmentId string) (*Attachment, error) {
+	body, err := c.client.Get("/cards/" + c.Id + "/attachments/" + attachmentId)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	resp, err := c.client.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
-		return
-	}
-
-	err = json.Unmarshal(body, &attachment)
+	attachment := &Attachment{}
+	err = json.Unmarshal(body, attachment)
 	attachment.client = c.client
-	return
+	return attachment, err
 }
 
 func (c *Card) Actions() (actions []Action, err error) {
-	req, err := c.client.NewRequest("GET", c.client.endpoint+"/cards/"+c.Id+"/actions", nil)
+	body, err := c.client.Get("/cards/" + c.Id + "/actions")
 	if err != nil {
-		return
-	}
-
-	resp, err := c.client.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	} else if resp.StatusCode != 200 {
-		err = fmt.Errorf("Received unexpected status %d while trying to retrieve the server data", resp.StatusCode)
 		return
 	}
 
 	err = json.Unmarshal(body, &actions)
-	for i, _ := range actions {
+	for i := range actions {
 		actions[i].client = c.client
 	}
 	return
 }
 
-func (c *Card) PostComment(text string) (body []byte, err error) {
+// AddChecklist will add a checklist to the card.
+// https://developers.trello.com/advanced-reference/card#post-1-cards-card-id-or-shortlink-checklists
+func (c *Card) AddChecklist(name string) (*Checklist, error) {
+	newList := &Checklist{}
+
+	payload := url.Values{}
+	payload.Set("name", name)
+	body, err := c.client.Post("/cards/"+c.Id+"/checklists", payload)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(body, newList); err != nil {
+		return nil, err
+	}
+	newList.client = c.client
+	// the new list has no items, no need to walk those adding client
+	return newList, err
+}
+
+// AddComment will add a new comment to the card
+// https://developers.trello.com/advanced-reference/card#post-1-cards-card-id-or-shortlink-actions-comments
+func (c *Card) AddComment(text string) (*Action, error) {
+	newAction := &Action{}
+
 	payload := url.Values{}
 	payload.Set("text", text)
 
-	body, err = c.client.PostForm("/cards/"+c.Id+"/actions/comments", payload)
-	return
+	body, err := c.client.Post("/cards/"+c.Id+"/actions/comments", payload)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(body, newAction); err != nil {
+		return nil, err
+	}
+	newAction.client = c.client
+	return newAction, nil
 }
